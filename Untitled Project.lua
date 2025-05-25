@@ -1,8 +1,8 @@
--- Untitled Project: ESP and Aimbot
+-- Untitled Project: ESP (Box) and Aimbot with M2 Activation and smaller FOV
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local Camera = game:GetService("Workspace").CurrentCamera
+local Camera = Workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local RunService = game:GetService("RunService")
@@ -10,64 +10,76 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Settings
 local ESPEnabled = true
-local AimbotEnabled = true
-local FOVRadius = 100
+local AimbotEnabled = false -- true when M2 held
+local FOVRadius = 50 -- smaller FOV for aimbot
 local AimbotStrength = 0.5
-local AimbotPrediction = 0.1
 local TargetPart = "Head"
 
--- ESP Functionality
-local function createESP(player)
+-- ESP Functionality: Boxes instead of nametags
+local ESPBoxes = {}
+
+local function createBox(player)
     if player == LocalPlayer then return end
     local character = player.Character
-    if not character or not character:FindFirstChild("Head") then return end
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
 
-    local billboard = Instance.new("BillboardGui")
-    billboard.Adornee = character.Head
-    billboard.Size = UDim2.new(0, 100, 0, 40)
-    billboard.StudsOffset = Vector3.new(0, 2, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Name = "ESP_" .. player.Name
-    billboard.Parent = character
+    local box = Drawing.new("Square")
+    box.Visible = true
+    box.Color = Color3.new(1, 0, 0) -- red color
+    box.Thickness = 2
+    box.Transparency = 1
+    box.Filled = false
 
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(1, 0, 1, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = player.Name
-    nameLabel.TextColor3 = Color3.new(1, 0, 0)
-    nameLabel.TextStrokeTransparency = 0.5
-    nameLabel.Font = Enum.Font.SourceSansBold
-    nameLabel.TextScaled = true
-    nameLabel.Parent = billboard
+    ESPBoxes[player] = box
 end
 
-local function removeESP(player)
-    if player == LocalPlayer then return end
-    local character = player.Character
-    if character then
-        for _, gui in pairs(character:GetChildren()) do
-            if gui:IsA("BillboardGui") and gui.Name == "ESP_" .. player.Name then
-                gui:Destroy()
+local function removeBox(player)
+    if ESPBoxes[player] then
+        ESPBoxes[player]:Remove()
+        ESPBoxes[player] = nil
+    end
+end
+
+local function updateBoxes()
+    for _, player in pairs(Players:GetPlayers()) do
+        if ESPEnabled and player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+            if not ESPBoxes[player] then
+                createBox(player)
             end
+        else
+            removeBox(player)
         end
     end
 end
 
-local function updateESP()
+-- Update box position every frame
+RunService.RenderStepped:Connect(function()
     if ESPEnabled then
-        for _, player in pairs(Players:GetPlayers()) do
-            if player.Character and player.Character:FindFirstChild("Head") then
-                if not player.Character:FindFirstChild("ESP_" .. player.Name) then
-                    createESP(player)
+        for player, box in pairs(ESPBoxes) do
+            local character = player.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                local rootPart = character.HumanoidRootPart
+                local pos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+                if onScreen then
+                    local sizeFactor = 200 / pos.Z -- scale box size based on distance (pos.Z)
+                    local boxSize = Vector2.new(50 * sizeFactor, 100 * sizeFactor) -- width, height
+                    
+                    box.Position = Vector2.new(pos.X - boxSize.X / 2, pos.Y - boxSize.Y / 2)
+                    box.Size = boxSize
+                    box.Visible = true
+                else
+                    box.Visible = false
                 end
+            else
+                box.Visible = false
             end
         end
     else
-        for _, player in pairs(Players:GetPlayers()) do
-            removeESP(player)
+        for _, box in pairs(ESPBoxes) do
+            box.Visible = false
         end
     end
-end
+end)
 
 -- Aimbot Functionality
 local function getClosestPlayer()
@@ -91,13 +103,36 @@ end
 local function aimAtTarget(target)
     if target and target.Character and target.Character:FindFirstChild(TargetPart) then
         local targetPosition = target.Character[TargetPart].Position
-        local direction = (targetPosition - Camera.CFrame.Position).unit
         local aimCFrame = CFrame.new(Camera.CFrame.Position, targetPosition)
         Camera.CFrame = Camera.CFrame:Lerp(aimCFrame, AimbotStrength)
     end
 end
 
--- Main Loop
+-- Detect M2 hold to enable/disable aimbot
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        AimbotEnabled = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        AimbotEnabled = false
+    end
+end)
+
+-- Toggle ESP with F1
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.F1 then
+        ESPEnabled = not ESPEnabled
+        updateBoxes()
+    end
+end)
+
+-- Main Loop for aimbot
 RunService.RenderStepped:Connect(function()
     if AimbotEnabled then
         local closestPlayer = getClosestPlayer()
@@ -107,16 +142,5 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Toggle ESP and Aimbot
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.KeyCode == Enum.KeyCode.F1 then
-        ESPEnabled = not ESPEnabled
-        updateESP()
-    elseif input.KeyCode == Enum.KeyCode.F2 then
-        AimbotEnabled = not AimbotEnabled
-    end
-end)
-
--- Initial Setup
-updateESP()
+-- Initial ESP Setup
+updateBoxes()
