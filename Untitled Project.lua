@@ -1,35 +1,40 @@
--- Untitled Project: ESP (Box) and Aimbot with M2 Activation and smaller FOV
-
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local Camera = Workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
 -- Settings
+local AimbotEnabled = false
 local ESPEnabled = true
-local AimbotEnabled = false -- true when M2 held
-local FOVRadius = 50 -- smaller FOV for aimbot
-local AimbotStrength = 0.5
+local AimbotFOV = 60 -- smaller FOV for tighter aim
+local AimbotStrength = 0.4
 local TargetPart = "Head"
 
--- ESP Functionality: Boxes instead of nametags
+-- Create crosshair
+local crosshair = Drawing.new("Line")
+crosshair.From = Vector2.new(Camera.ViewportSize.X / 2 - 10, Camera.ViewportSize.Y / 2)
+crosshair.To = Vector2.new(Camera.ViewportSize.X / 2 + 10, Camera.ViewportSize.Y / 2)
+crosshair.Color = Color3.new(1, 1, 1)
+crosshair.Thickness = 2
+
+local crosshair2 = Drawing.new("Line")
+crosshair2.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2 - 10)
+crosshair2.To = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2 + 10)
+crosshair2.Color = Color3.new(1, 1, 1)
+crosshair2.Thickness = 2
+
+-- ESP boxes
 local ESPBoxes = {}
 
 local function createBox(player)
     if player == LocalPlayer then return end
-    local character = player.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-
     local box = Drawing.new("Square")
     box.Visible = true
-    box.Color = Color3.new(1, 0, 0) -- red color
+    box.Color = Color3.new(0, 1, 0)
     box.Thickness = 2
-    box.Transparency = 1
     box.Filled = false
-
     ESPBoxes[player] = box
 end
 
@@ -42,7 +47,7 @@ end
 
 local function updateBoxes()
     for _, player in pairs(Players:GetPlayers()) do
-        if ESPEnabled and player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
             if not ESPBoxes[player] then
                 createBox(player)
             end
@@ -52,7 +57,6 @@ local function updateBoxes()
     end
 end
 
--- Update box position every frame
 RunService.RenderStepped:Connect(function()
     if ESPEnabled then
         for player, box in pairs(ESPBoxes) do
@@ -61,9 +65,8 @@ RunService.RenderStepped:Connect(function()
                 local rootPart = character.HumanoidRootPart
                 local pos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
                 if onScreen then
-                    local sizeFactor = 200 / pos.Z -- scale box size based on distance (pos.Z)
-                    local boxSize = Vector2.new(50 * sizeFactor, 100 * sizeFactor) -- width, height
-                    
+                    local sizeFactor = 200 / pos.Z
+                    local boxSize = Vector2.new(50 * sizeFactor, 100 * sizeFactor)
                     box.Position = Vector2.new(pos.X - boxSize.X / 2, pos.Y - boxSize.Y / 2)
                     box.Size = boxSize
                     box.Visible = true
@@ -81,10 +84,10 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Aimbot Functionality
+-- Aimbot
 local function getClosestPlayer()
     local closestPlayer = nil
-    local shortestDistance = FOVRadius
+    local shortestDistance = AimbotFOV
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild(TargetPart) then
             local screenPos, onScreen = Camera:WorldToScreenPoint(player.Character[TargetPart].Position)
@@ -108,7 +111,6 @@ local function aimAtTarget(target)
     end
 end
 
--- Detect M2 hold to enable/disable aimbot
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.MouseButton2 then
@@ -123,24 +125,13 @@ UserInputService.InputEnded:Connect(function(input, gameProcessed)
     end
 end)
 
--- Toggle ESP with F1
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.F1 then
-        ESPEnabled = not ESPEnabled
-        updateBoxes()
-    end
-end)
-
--- Main Loop for aimbot
 RunService.RenderStepped:Connect(function()
     if AimbotEnabled then
-        local closestPlayer = getClosestPlayer()
-        if closestPlayer then
-            aimAtTarget(closestPlayer)
+        local target = getClosestPlayer()
+        if target then
+            aimAtTarget(target)
         end
     end
 end)
 
--- Initial ESP Setup
 updateBoxes()
